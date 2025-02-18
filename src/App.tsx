@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { MobileNav } from './components/MobileNav';
@@ -16,44 +17,90 @@ import AdminPanel from './pages/Admin';
 import { supabase } from './lib/supabase';
 import { useAuthStore } from './store/authStore';
 
-function App() {
-  const setUser = useAuthStore((state) => state.setUser);
+function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const { user } = useAuthStore();
+  const location = useLocation();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-  }, [setUser]);
+  if (!user) {
+    return <Navigate to="/profile" state={{ from: location }} replace />;
+  }
+
+  return children;
+}
+
+function App() {
+  const { user, setUser } = useAuthStore();
+
+ // Check if user is authenticated on app load
+ useEffect(() => {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    setUser(session?.user ?? null);
+  });
+}, [setUser])
 
   return (
     <Router>
       <div className="flex h-screen bg-gradient-to-br from-gray-900 to-black text-white">
-        {/* Sidebar for desktop */}
-        <div className="hidden md:block">
-          <Sidebar />
-        </div>
-        
+        {/* Sidebar for logged-in users */}
+        {user && (
+          <div className="hidden md:block">
+            <Sidebar />
+          </div>
+        )}
+
         <main className="flex-1 overflow-auto pb-28 md:pb-28 lg:pb-28">
           <div className="h-full p-4 md:p-8">
             <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/search" element={<Search />} />
-              <Route path="/library" element={<Library />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/admin" element={<AdminPanel />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Home />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/search"
+                element={
+                  <ProtectedRoute>
+                    <Search />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/library"
+                element={
+                  <ProtectedRoute>
+                    <Library />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute>
+                    <AdminPanel />
+                  </ProtectedRoute>
+                }
+              />
             </Routes>
           </div>
         </main>
 
-        {/* Mobile Navigation */}
-        <div className="md:hidden fixed bottom-[72px] left-0 right-0 bg-black/95 border-t border-white/10">
-          <MobileNav />
-        </div>
+        {/* Mobile Navigation - Only for logged-in users */}
+        {user && (
+          <div className="md:hidden fixed bottom-[0px] left-0 right-0 bg-black/95 border-t border-white/10">
+            <MobileNav />
+          </div>
+        )}
 
-        {/* Player */}
-        <div className="fixed bottom-0 left-0 right-0">
-          <Player />
-        </div>
+        {/* Player - Only for logged-in users */}
+        {user && (
+          <div className="fixed bottom-0 left-0 right-0">
+            <Player />
+          </div>
+        )}
       </div>
     </Router>
   );

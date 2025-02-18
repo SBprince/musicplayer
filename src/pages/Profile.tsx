@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Camera, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom'; 
+
 
 export const Profile: React.FC = () => {
   const { user, signIn, signUp, signOut } = useAuthStore();
@@ -24,64 +27,77 @@ export const Profile: React.FC = () => {
   }, []);
 
   // Load or create profile when user is authenticated
-  useEffect(() => {
-    async function loadOrCreateProfile() {
-      if (!user) return;
+useEffect(() => {
+  async function loadOrCreateProfile() {
+    if (!user) return;
 
-      try {
-        // Try to load existing profile
-        let { data, error } = await supabase
+    try {
+      let { data, error } = await supabase
+        .from('profiles')
+        .select('username, avatar_url')
+        .eq('id', user.id)
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        const defaultUsername = user.email?.split('@')[0] || 'user';
+        const { data: newProfile, error: createError } = await supabase
           .from('profiles')
-          .select('username, avatar_url')
-          .eq('id', user.id)
+          .insert([{ id: user.id, username: defaultUsername, avatar_url: '' }])
+          .select()
           .single();
 
-        // If no profile exists, create one
-        if (error && error.code === 'PGRST116') {
-          const defaultUsername = user.email?.split('@')[0] || 'user';
-          const { data: newProfile, error: createError } = await supabase
-            .from('profiles')
-            .insert([
-              {
-                id: user.id,
-                username: defaultUsername,
-                avatar_url: '',
-              }
-            ])
-            .select()
-            .single();
-
-          if (createError) throw createError;
-          data = newProfile;
-        } else if (error) {
-          throw error;
-        }
-
-        if (data) {
-          setFormData(prev => ({
-            ...prev,
-            username: data.username || '',
-            avatar_url: data.avatar_url || '',
-          }));
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error);
+        if (createError) throw createError;
+        data = newProfile;
+      } else if (error) {
+        throw error;
       }
+
+      if (data) {
+        setFormData((prev) => ({
+          ...prev,
+          username: data.username || '',
+          avatar_url: data.avatar_url || '',
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
     }
+  }
 
-    loadOrCreateProfile();
-  }, [user]);
+  loadOrCreateProfile();
+}, [user]);
 
+// ✅ Handle Redirecting the User
+const navigate = useNavigate();
+const location = useLocation();
+
+useEffect(() => {
+  if (!user) return;
+
+  // Stay on profile page after sign-up
+  if (isSignUp) return;
+
+  // ✅ Only redirect if the user just logged in (not if they clicked Profile manually)
+  const previousPath = location.state?.from?.pathname;
+
+  if (previousPath && previousPath !== '/profile') {
+    navigate('/');
+  }
+}, [user, isSignUp, navigate]);
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-
+  
     try {
       if (isSignUp) {
         await signUp(formData.email, formData.password);
+        // Stay on the profile page after sign-up for setting up username/avatar
       } else {
         await signIn(formData.email, formData.password);
+        // Redirect to home page after signing in
+        navigate('/');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -89,6 +105,7 @@ export const Profile: React.FC = () => {
       setIsLoading(false);
     }
   };
+  
 
   const handleUpdateProfile = async () => {
     if (!user) return;

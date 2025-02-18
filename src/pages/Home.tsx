@@ -14,42 +14,39 @@ export const Home: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    const fetchData = async () => {
+      if (user) {
+        try {
+          setLoading(true);
+          
+          // Fetch user profile
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', user.id)
+            .single();
+          if (profileError) throw profileError;
+          setAvatarUrl(profile?.avatar_url || '');
 
-    const fetchUserProfile = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('avatar_url')
-          .eq('id', user.id)
-          .single();
-
-        if (error) throw error;
-        setAvatarUrl(data?.avatar_url || '');
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-      }
-    };
-
-    const fetchSongs = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('songs')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setAllSongs(data || []);
-      } catch (error) {
-        console.error('Error fetching songs:', error);
-      } finally {
+          // Fetch songs
+          const { data: songs, error: songsError } = await supabase
+            .from('songs')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (songsError) throw songsError;
+          setAllSongs(songs || []);
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        // Ensuring loading state is false for unauthenticated users
         setLoading(false);
       }
     };
 
-    fetchUserProfile();
-    fetchSongs();
+    fetchData();
   }, [user]);
 
   const handlePlayPause = (song: Song) => {
@@ -62,9 +59,7 @@ export const Home: React.FC = () => {
 
   // Group songs by artist
   const songsByArtist = allSongs.reduce((acc, song) => {
-    if (!acc[song.artist]) {
-      acc[song.artist] = [];
-    }
+    if (!acc[song.artist]) acc[song.artist] = [];
     acc[song.artist].push(song);
     return acc;
   }, {} as Record<string, Song[]>);
@@ -73,6 +68,20 @@ export const Home: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-400">
+        <h1 className="text-3xl font-bold">Welcome to the Music App 🎵</h1>
+        <p className="mt-4">Sign in to explore and play your favorite tracks.</p>
+        <Link to="/profile">
+          <button className="mt-6 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+            Sign In
+          </button>
+        </Link>
       </div>
     );
   }
